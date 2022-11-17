@@ -1,0 +1,145 @@
+*** PUNTO 2 ***
+clear all
+set more off
+
+** Paso 0, setteos basicos para trabajar con INF
+tsset Tiempo
+tsline INF
+
+** Primer paso: Desestacionalizar y sacar tendencia
+------------------------------------------------------------------------
+***OBSERVACIÓN (NO ESTOY SEGURA)
+/*Para ver la estacionalidad analizamos si la serie tiene raiz unitaria*/
+
+dfuller IPC
+dfuller d.IPC
+dfuller d.logIPC
+
+/*Test de Fuller con Lags
+
+1) busco cantidad de lags */
+varsoc d.logipc if fecha<=tm(2020m12),maxlag (36)
+
+/* 2) Testeo */
+
+dfuller d.logipc if fecha<=tm(2020m1),lag(1)
+
+**Si quiero identificar si la serie tiene una tendencia deterministica (si por el mero paso del tiempo se modifica la Y_t)
+
+dfuller logIpc if fecha<=(2020m12),lag(.) trend reg
+
+--------------------------------------------------------
+
+	**Crear dummys estacionales
+	gen Tiempo2 = Tiempo^2
+reg INF Tiempo Tiempo2    // No hay efecto cuadratico parece
+reg INF Tiempo
+predict trend
+predict CLEAN_INF, resid
+reg CLEAN_INF i.Mes    //Parecería no haber estacionalidad??
+
+**ACA NO HAY QUE PREDECIR LOS RESIDUOS PARA DESPUES GRAFICAR???**
+
+tsline CLEAN_INF
+
+** Segundo paso: Ver ac
+
+corrgram CLEAN_INF
+ac CLEAN_INF
+pac CLEAN_INF
+
+** Parecería ser un AR 1
+** Tercer paso: probar con Information Criteria
+
+arima CLEAN_INF, arima (1,0,0)
+estat ic
+
+** -1374.107  -1364.095
+
+arima CLEAN_INF, arima (0,0,1)
+estat ic
+
+** -1365.155  -1355.143
+
+arima CLEAN_INF, arima (1,0,1)
+estat ic
+
+**  -1372.116  -1358.765
+
+arima CLEAN_INF, arima (2,0,0)
+estat ic
+
+**  -1372.114  -1358.764
+
+arima CLEAN_INF, arima (2,0,1)   //Pq no aparece el P value?
+estat ic
+
+** -1377.6   -1364.25
+
+arima CLEAN_INF, arima (3,0,0)
+estat ic
+
+**  -1370.668   -1353.98
+
+arima CLEAN_INF, arima (4,0,0)
+estat ic
+
+**  -1368.67  -1348.644
+
+*** Cuarto paso chequear la correlación de los ruidos blancos de los mejores modelos
+
+arima CLEAN_INF, arima (1,0,0)
+predict er, resid
+corrgram er
+drop er
+
+arima CLEAN_INF, arima (2,0,1)
+predict er2, resid
+corrgram er2
+drop er2
+
+** Dan todos no significativos, por lo tanto la hipotesis nula (Que la autocovariazna es 0) no se puede rechazar
+
+*** Conclusión: El mejor bajo ambos criterios es el ARMA 2 1
+
+*** PUNTO 3 ***
+
+** Ex - Post Training
+
+arima CLEAN_INF if Tiempo < 206, arima (2,0,1)
+predict inf_pred1 if Tiempo < 206
+tsline inf_pred1 CLEAN_INF
+predict er, resid
+corrgram er
+drop er
+
+arima CLEAN_INF if Tiempo < 206, arima (1,0,0)
+predict inf_pred2 if Tiempo < 206
+tsline inf_pred2 CLEAN_INF
+predict er, resid
+corrgram er
+drop er
+
+tsline inf_pred1 inf_pred2 CLEAN_INF
+
+** Ambos parecer ser modelos decentes
+
+** Ex-Post Testing
+
+arima CLEAN_INF if Tiempo < 206, arima (2,0,1)
+predict inf_pred1_expost if Tiempo <= 209, dynamic(205) 
+gen error_inf_pred1_expost = CLEAN_INF - inf_pred1_expost if Tiempo > 205 & Tiempo < 217
+gen error_inf_pred1_expost2 = error_inf_pred1_expost^2
+
+arima CLEAN_INF if Tiempo < 206, arima (1,0,0)
+predict inf_pred2_expost if Tiempo <= 209, dynamic(205)
+gen error_inf_pred2_expost = CLEAN_INF - inf_pred2_expost if Tiempo > 205 & Tiempo < 217
+gen error_inf_pred2_expost2 = error_inf_pred2_expost^2
+
+** Comparacióm
+sum error_inf_pred1_expost2 error_inf_pred2_expost2
+
+gen inf_pred1_trend = inf_pred1_expost + trend
+gen inf_pred2_trend = inf_pred2_expost + trend
+
+tsline inf_pred1_trend inf_pred2_trend INF
