@@ -1,0 +1,35 @@
+clear all
+set more off
+
+***Grafique la serie y realice un analisis estadístico para determinar raíces 
+unitarias, el orden de integración, y la presencia de estacionalidad. Para las 
+preguntas siguientes debera trabajar sobre la serie sin tendencia y desestacionalizada**
+
+*Seteo la serie en meses*
+tsset Fecha,monthly
+
+*Genero el log del IPC*
+gen logIPC=ln(IPC)
+
+*Gráficos*
+
+tsline IPC 
+
+*Gráfico en diferencias*
+gen 
+tsline d.IPC
+
+*Log del Ipc*
+tsline logIPC
+
+*Log del Ipc en diferencias*
+tsline D.logIPC
+
+**Contrasto para ver si hay raices unitarias**
+
+*Test Dickey-Fuller*
+
+dfuller IPC
+dfuller D.IPC 
+dfuller logIPC
+dfuller d.logIPC
